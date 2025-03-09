@@ -58,7 +58,14 @@ jobs:
           # Set up MSYS2
           choco install msys2
           # Install GExiv2
-          C:\msys64\usr\bin\bash.exe -lc "pacman -S --noconfirm mingw-w64-x86_64-gexiv2"
+          # C:\msys64\usr\bin\bash.exe -lc "pacman -S --noconfirm mingw-w64-x86_64-pkg-config mingw-w64-x86_64-gexiv2"
+          
+          # Jalankan script fix-pkg-config.bat
+          cmd /c fix-pkg-config.bat
+
+          # Tambahkan mingw64/bin ke PATH untuk proses build
+          echo "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+    
 
       - name: Extract GExiv2 Dependencies (macOS)
         if: matrix.platform == 'macos-latest'
