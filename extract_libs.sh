@@ -60,14 +60,22 @@ elif [[ "$OS" == "Darwin" ]]; then
     
     # Salin library utama
     cp "$(brew --prefix)/lib/libgexiv2.dylib" src-tauri/libs/macos/
-    
+
     # Temukan dependencies dengan otool
     DEPS=$(otool -L "$(brew --prefix)/lib/libgexiv2.dylib" | grep -v libgexiv2 | grep "$(brew --prefix)" | awk -F' ' '{print $1}')
     
     # Salin semua dependencies
     for dep in $DEPS; do
         base_name=$(basename "$dep")
+
+        # Get current user and group
+        CURRENT_USER=$(whoami)
+        CURRENT_GROUP=$(id -gn)
+        
+        # Copy file and set permissions
         cp "$dep" "src-tauri/libs/macos/"
+        chown $CURRENT_USER:$CURRENT_GROUP "src-tauri/libs/macos/$(basename "$dep")"
+        chmod 755 "src-tauri/libs/macos/$(basename "$dep")"
         echo "Copied $base_name"
         
         # Perbaiki path di dalam library
