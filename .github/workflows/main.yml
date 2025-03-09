@@ -70,8 +70,8 @@ jobs:
           
       - name: Run extract_lib script
         run: |
-          chmod +x ./extract_lib.sh
-          ./extract_lib.sh
+          chmod +x ./extract_libs.sh
+          ./extract_libs.sh
 
       - name: install frontend dependencies
         run: bun install # change this to npm, pnpm or bun depending on which one you use.
