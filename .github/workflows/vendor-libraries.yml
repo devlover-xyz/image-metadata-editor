@@ -17,6 +17,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           token: ${{ secrets.REPO_TOKEN }}  # Gunakan PAT dengan izin push
+          fetch-depth: 0  # Fetch semua history untuk mencegah rejection
 
       - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
@@ -42,12 +43,34 @@ jobs:
           Write-Host "Menjalankan script ekstraksi library Windows..."
           ./scripts/extract-windows-libs.ps1
 
-      - name: Commit Windows Libraries
+      - name: Commit and Push Windows Libraries
         run: |
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
+          
+          # Fetch the latest changes from remote
+          git fetch origin
+          
+          # Create a unique branch name for this run
+          $branchName = "lib-update-windows-$env:GITHUB_RUN_ID"
+          git checkout -b $branchName
+          
+          # Add changes
           git add src-tauri/libs/windows
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Update Windows libraries" && git push)
+          
+          # Check if there are changes to commit
+          $hasChanges = (git status --porcelain | Measure-Object).Count -gt 0
+          if ($hasChanges) {
+            git commit -m "Update Windows libraries"
+            git push origin $branchName
+            
+            # Create or update PR
+            gh pr create --title "Update Windows libraries" --body "Updated Windows libraries via automated script" --base main --head $branchName || gh pr edit --title "Update Windows libraries" --body "Updated Windows libraries via automated script" 
+          } else {
+            Write-Host "No changes to commit"
+          }
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_TOKEN }}
 
   extract-macos-libraries:
     runs-on: macos-latest
@@ -56,6 +79,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           token: ${{ secrets.REPO_TOKEN }}  # Gunakan PAT dengan izin push
+          fetch-depth: 0  # Fetch semua history untuk mencegah rejection
 
       - name: Run macOS Library Extraction Script
         run: |
@@ -72,12 +96,33 @@ jobs:
           echo "Menjalankan script ekstraksi library macOS..."
           ./scripts/extract-macos-libs.sh
 
-      - name: Commit macOS Libraries
+      - name: Commit and Push macOS Libraries
         run: |
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
+          
+          # Fetch the latest changes from remote
+          git fetch origin
+          
+          # Create a unique branch name for this run
+          branchName="lib-update-macos-$GITHUB_RUN_ID"
+          git checkout -b $branchName
+          
+          # Add changes
           git add src-tauri/libs/macos
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Update macOS libraries" && git push)
+          
+          # Check if there are changes to commit
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git commit -m "Update macOS libraries"
+            git push origin $branchName
+            
+            # Create or update PR
+            gh pr create --title "Update macOS libraries" --body "Updated macOS libraries via automated script" --base main --head $branchName || gh pr edit --title "Update macOS libraries" --body "Updated macOS libraries via automated script"
+          else
+            echo "No changes to commit"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_TOKEN }}
 
   extract-linux-libraries:
     runs-on: ubuntu-latest
@@ -86,6 +131,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           token: ${{ secrets.REPO_TOKEN }}  # Gunakan PAT dengan izin push
+          fetch-depth: 0  # Fetch semua history untuk mencegah rejection
 
       - name: Run Linux Library Extraction Script
         run: |
@@ -102,14 +148,35 @@ jobs:
           echo "Menjalankan script ekstraksi library Linux..."
           sudo ./scripts/extract-linux-libs.sh
 
-      - name: Commit Linux Libraries
+      - name: Commit and Push Linux Libraries
         run: |
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
+          
+          # Fetch the latest changes from remote
+          git fetch origin
+          
+          # Create a unique branch name for this run
+          branchName="lib-update-linux-$GITHUB_RUN_ID"
+          git checkout -b $branchName
+          
+          # Add changes
           git add src-tauri/libs/linux
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Update Linux libraries" && git push)
+          
+          # Check if there are changes to commit
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git commit -m "Update Linux libraries"
+            git push origin $branchName
+            
+            # Create or update PR
+            gh pr create --title "Update Linux libraries" --body "Updated Linux libraries via automated script" --base main --head $branchName || gh pr edit --title "Update Linux libraries" --body "Updated Linux libraries via automated script"
+          else
+            echo "No changes to commit"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_TOKEN }}
 
-  create-pr:
+  merge-prs:
     needs: [extract-windows-libraries, extract-macos-libraries, extract-linux-libraries]
     runs-on: ubuntu-latest
     if: ${{ github.event.inputs.force_update == 'true' }}
@@ -118,36 +185,51 @@ jobs:
         uses: actions/checkout@v3
         with:
           token: ${{ secrets.REPO_TOKEN }}
-          ref: main
           fetch-depth: 0
 
-      - name: Check for changes and create PR
+      - name: Setup GitHub CLI
         run: |
-          git fetch origin
-          # Buat branch baru untuk perubahan
-          git checkout -b update-libs-${{ github.run_id }}
-          # Ambil semua perubahan dari branch main
-          git merge origin/main
-          
-          # Cek apakah ada perubahan yang perlu di-merge
-          if git diff --quiet origin/main -- src-tauri/libs; then
-            echo "No library changes detected, skipping PR creation"
-            exit 0
-          fi
-          
-          # Push branch baru
-          git push --set-upstream origin update-libs-${{ github.run_id }}
-          
-          # Install GitHub CLI
           curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
           echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
           sudo apt update
           sudo apt install gh -y
+
+      - name: Merge all Platform PRs
+        run: |
+          # List PRs
+          echo "Finding open PRs from library update jobs..."
           
-          # Buat PR
-          gh pr create --title "Update bundled libraries" \
-                      --body "This PR updates native library dependencies for multiple platforms" \
-                      --base main \
-                      --head update-libs-${{ github.run_id }}
+          # Try to merge the Windows PR
+          windowsBranch="lib-update-windows-$GITHUB_RUN_ID"
+          gh pr list --head $windowsBranch --json number --jq '.[0].number' | xargs -I{} gh pr merge {} --merge || echo "No Windows PR to merge"
+          
+          # Try to merge the macOS PR
+          macosBranch="lib-update-macos-$GITHUB_RUN_ID"
+          gh pr list --head $macosBranch --json number --jq '.[0].number' | xargs -I{} gh pr merge {} --merge || echo "No macOS PR to merge"
+          
+          # Try to merge the Linux PR
+          linuxBranch="lib-update-linux-$GITHUB_RUN_ID"
+          gh pr list --head $linuxBranch --json number --jq '.[0].number' | xargs -I{} gh pr merge {} --merge || echo "No Linux PR to merge"
+          
+          # Create a summary PR if force update was selected
+          if [ "${{ github.event.inputs.force_update }}" == "true" ]; then
+            # Create a combined branch
+            git checkout -b lib-update-all-$GITHUB_RUN_ID
+            
+            # Pull all changes from main
+            git pull origin main
+            
+            # Check for changes and create PR
+            if git diff --quiet origin/main -- src-tauri/libs; then
+              echo "No library changes detected, skipping PR creation"
+            else
+              git push origin lib-update-all-$GITHUB_RUN_ID
+              
+              gh pr create --title "Update all platform libraries" \
+                          --body "This PR combines all library updates from the individual platform jobs" \
+                          --base main \
+                          --head lib-update-all-$GITHUB_RUN_ID
+            fi
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.REPO_TOKEN }}
