@@ -26,44 +26,15 @@ jobs:
             mingw-w64-x86_64-pkg-config
             mingw-w64-x86_64-gexiv2
 
-      - name: Extract Windows Libraries
+      - name: Run Windows Library Extraction Script
         shell: pwsh
         run: |
-          # Buat direktori untuk menyimpan library
-          $libDir = "src-tauri/libs/windows/x86_64"
-          New-Item -Path $libDir -ItemType Directory -Force
-
-          # Salin file DLL utama
-          Copy-Item C:\msys64\mingw64\bin\libgexiv2-2.dll "$libDir\gexiv2.dll"
-
-          # Temukan semua dependensi dengan ldd
-          $deps = & C:\msys64\usr\bin\bash.exe -c "ldd /mingw64/bin/libgexiv2-2.dll | grep -v libgexiv2 | grep '=> /mingw64/' | awk '{print \$3}'"
+          # Set execution policy for current process
+          Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process -Force
           
-          foreach ($dep in $deps) {
-            $dep = $dep -replace '/mingw64/bin/', ''
-            Write-Host "Copying dependency: $dep"
-            Copy-Item "C:\msys64\mingw64\bin\$dep" "$libDir\"
-          }
-
-          # Tambahan library yang mungkin diperlukan
-          $additionalLibs = @(
-            "libglib-2.0-0.dll",
-            "libgobject-2.0-0.dll",
-            "libintl-8.dll",
-            "libiconv-2.dll",
-            "libpcre-1.dll",
-            "libwinpthread-1.dll"
-          )
-
-          foreach ($lib in $additionalLibs) {
-            if (Test-Path "C:\msys64\mingw64\bin\$lib" -and -not (Test-Path "$libDir\$lib")) {
-              Write-Host "Copying additional library: $lib"
-              Copy-Item "C:\msys64\mingw64\bin\$lib" "$libDir\"
-            }
-          }
-
-          # Tampilkan isi direktori
-          Get-ChildItem -Path $libDir
+          # Run the extraction script
+          Write-Host "Menjalankan script ekstraksi library Windows..."
+          .\extract-windows-libs.ps1
 
       - name: Commit Windows Libraries
         run: |
@@ -80,73 +51,14 @@ jobs:
         with:
           token: ${{ secrets.REPO_TOKEN }}  # Gunakan PAT dengan izin push
 
-      - name: Extract macOS Libraries (x86_64 and arm64)
+      - name: Run macOS Library Extraction Script
         run: |
-          # Instal dependencies
-          brew update
-          brew install pkg-config gexiv2
+          # Make the script executable
+          chmod +x extract-macos-libs.sh
           
-          # Deteksi arsitektur saat ini
-          ARCH=$(uname -m)
-          echo "Current architecture: $ARCH"
-          
-          # Buat direktori untuk menyimpan library
-          mkdir -p src-tauri/libs/macos/x86_64
-          mkdir -p src-tauri/libs/macos/arm64
-          mkdir -p src-tauri/libs/macos/universal
-          
-          # Cari lokasi library gexiv2
-          GEXIV2_PATH=$(pkg-config --variable=libdir gexiv2)/libgexiv2.dylib
-          echo "GExiv2 library found at: $GEXIV2_PATH"
-          
-          # Ekstrak library untuk arsitektur saat ini (biasanya x86_64 di GitHub Actions)
-          cp "$GEXIV2_PATH" src-tauri/libs/macos/x86_64/libgexiv2.dylib
-          
-          # Cari dependencies
-          DEPS=$(otool -L "$GEXIV2_PATH" | grep -v libgexiv2 | grep "$(brew --prefix)" | awk -F' ' '{print $1}')
-          for dep in $DEPS; do
-            base_name=$(basename "$dep")
-            echo "Copying x86_64 dependency: $base_name"
-            cp "$dep" "src-tauri/libs/macos/x86_64/$base_name"
-          done
-          
-          # Untuk arm64, kita harus menggunakan strategi khusus
-          # Catatan: Di GitHub Actions, ini mungkin tidak berhasil tanpa runner khusus
-          # Pura-pura kita memiliki arm64 libraries dengan dummy file
-          echo "Note: arm64 libraries not available on this runner. Using placeholders."
-          echo "This is a placeholder for arm64 library. Replace with actual library." > src-tauri/libs/macos/arm64/libgexiv2.dylib
-          
-          # Di lingkungan lokal dengan akses ke perangkat ARM, gunakan:
-          # arch -arm64 brew install gexiv2
-          # ARM_GEXIV2_PATH=$(arch -arm64 pkg-config --variable=libdir gexiv2)/libgexiv2.dylib
-          # cp "$ARM_GEXIV2_PATH" src-tauri/libs/macos/arm64/libgexiv2.dylib
-          
-          # Copy x86_64 libraries ke universal untuk sementara
-          cp src-tauri/libs/macos/x86_64/* src-tauri/libs/macos/universal/
-          
-          # Perbaiki referensi path di library universal (untuk x86_64 saat ini)
-          for lib in src-tauri/libs/macos/universal/*.dylib; do
-            if [ -f "$lib" ]; then
-              base_name=$(basename "$lib")
-              # Fix ID
-              install_name_tool -id "@executable_path/$base_name" "$lib"
-              
-              # Fix dependencies
-              deps=$(otool -L "$lib" | grep -v "@executable_path" | grep -v "/usr/lib" | awk -F' ' '{print $1}')
-              for dep in $deps; do
-                dep_base=$(basename "$dep")
-                if [ -f "src-tauri/libs/macos/universal/$dep_base" ]; then
-                  echo "Fixing reference in $base_name to $dep_base"
-                  install_name_tool -change "$dep" "@executable_path/$dep_base" "$lib"
-                fi
-              done
-            fi
-          done
-          
-          # List direktori
-          echo "macOS library directories:"
-          ls -la src-tauri/libs/macos/x86_64/
-          ls -la src-tauri/libs/macos/universal/
+          # Run the extraction script
+          echo "Menjalankan script ekstraksi library macOS..."
+          ./extract-macos-libs.sh
 
       - name: Commit macOS Libraries
         run: |
@@ -163,41 +75,14 @@ jobs:
         with:
           token: ${{ secrets.REPO_TOKEN }}  # Gunakan PAT dengan izin push
 
-      - name: Extract Linux Libraries
+      - name: Run Linux Library Extraction Script
         run: |
-          # Instal dependencies
-          sudo apt-get update
-          sudo apt-get install -y libgexiv2-dev
+          # Make the script executable
+          chmod +x extract-linux-libs.sh
           
-          # Buat direktori untuk menyimpan library
-          mkdir -p src-tauri/libs/linux/x86_64
-          
-          # Cari lokasi library gexiv2
-          GEXIV2_PATH=$(pkg-config --variable=libdir gexiv2)/libgexiv2.so
-          if [ ! -f "$GEXIV2_PATH" ]; then
-            GEXIV2_PATH=$(find /usr/lib -name "libgexiv2.so*" | head -n 1)
-          fi
-          echo "GExiv2 library found at: $GEXIV2_PATH"
-          
-          # Salin library utama
-          cp "$GEXIV2_PATH" src-tauri/libs/linux/x86_64/libgexiv2.so
-          
-          # Cari dependencies
-          DEPS=$(ldd "$GEXIV2_PATH" | grep "=> /" | awk '{print $3}')
-          for dep in $DEPS; do
-            base_name=$(basename "$dep")
-            # Skip lib standar sistem
-            if [[ "$base_name" != libc.so* && "$base_name" != libm.so* && 
-                  "$base_name" != libdl.so* && "$base_name" != libpthread.so* && 
-                  "$base_name" != librt.so* && "$base_name" != "ld-linux"* ]]; then
-              echo "Copying dependency: $base_name"
-              cp "$dep" "src-tauri/libs/linux/x86_64/$base_name"
-            fi
-          done
-          
-          # List direktori
-          echo "Linux library directory:"
-          ls -la src-tauri/libs/linux/x86_64/
+          # Run the extraction script with sudo
+          echo "Menjalankan script ekstraksi library Linux..."
+          sudo ./extract-linux-libs.sh
 
       - name: Commit Linux Libraries
         run: |
