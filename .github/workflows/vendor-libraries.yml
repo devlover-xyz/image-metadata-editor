@@ -30,7 +30,7 @@ jobs:
         shell: pwsh
         run: |
           # Buat direktori untuk menyimpan library
-          $libDir = "vendor/libs/windows/x86_64"
+          $libDir = "src-tauri/libs/windows/x86_64"
           New-Item -Path $libDir -ItemType Directory -Force
 
           # Salin file DLL utama
@@ -69,7 +69,7 @@ jobs:
         run: |
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
-          git add vendor/libs/windows
+          git add src-tauri/libs/windows
           git diff --quiet && git diff --staged --quiet || (git commit -m "Update Windows libraries" && git push)
 
   extract-macos-libraries:
@@ -91,49 +91,68 @@ jobs:
           echo "Current architecture: $ARCH"
           
           # Buat direktori untuk menyimpan library
-          mkdir -p vendor/libs/macos/x86_64
-          mkdir -p vendor/libs/macos/arm64
-          mkdir -p vendor/libs/macos/universal
+          mkdir -p src-tauri/libs/macos/x86_64
+          mkdir -p src-tauri/libs/macos/arm64
+          mkdir -p src-tauri/libs/macos/universal
           
           # Cari lokasi library gexiv2
           GEXIV2_PATH=$(pkg-config --variable=libdir gexiv2)/libgexiv2.dylib
           echo "GExiv2 library found at: $GEXIV2_PATH"
           
           # Ekstrak library untuk arsitektur saat ini (biasanya x86_64 di GitHub Actions)
-          cp "$GEXIV2_PATH" vendor/libs/macos/x86_64/libgexiv2.dylib
+          cp "$GEXIV2_PATH" src-tauri/libs/macos/x86_64/libgexiv2.dylib
           
           # Cari dependencies
           DEPS=$(otool -L "$GEXIV2_PATH" | grep -v libgexiv2 | grep "$(brew --prefix)" | awk -F' ' '{print $1}')
           for dep in $DEPS; do
             base_name=$(basename "$dep")
             echo "Copying x86_64 dependency: $base_name"
-            cp "$dep" "vendor/libs/macos/x86_64/$base_name"
+            cp "$dep" "src-tauri/libs/macos/x86_64/$base_name"
           done
           
           # Untuk arm64, kita harus menggunakan strategi khusus
           # Catatan: Di GitHub Actions, ini mungkin tidak berhasil tanpa runner khusus
           # Pura-pura kita memiliki arm64 libraries dengan dummy file
           echo "Note: arm64 libraries not available on this runner. Using placeholders."
-          echo "This is a placeholder for arm64 library. Replace with actual library." > vendor/libs/macos/arm64/libgexiv2.dylib
+          echo "This is a placeholder for arm64 library. Replace with actual library." > src-tauri/libs/macos/arm64/libgexiv2.dylib
           
           # Di lingkungan lokal dengan akses ke perangkat ARM, gunakan:
           # arch -arm64 brew install gexiv2
           # ARM_GEXIV2_PATH=$(arch -arm64 pkg-config --variable=libdir gexiv2)/libgexiv2.dylib
-          # cp "$ARM_GEXIV2_PATH" vendor/libs/macos/arm64/libgexiv2.dylib
+          # cp "$ARM_GEXIV2_PATH" src-tauri/libs/macos/arm64/libgexiv2.dylib
           
           # Copy x86_64 libraries ke universal untuk sementara
-          cp vendor/libs/macos/x86_64/* vendor/libs/macos/universal/
+          cp src-tauri/libs/macos/x86_64/* src-tauri/libs/macos/universal/
+          
+          # Perbaiki referensi path di library universal (untuk x86_64 saat ini)
+          for lib in src-tauri/libs/macos/universal/*.dylib; do
+            if [ -f "$lib" ]; then
+              base_name=$(basename "$lib")
+              # Fix ID
+              install_name_tool -id "@executable_path/$base_name" "$lib"
+              
+              # Fix dependencies
+              deps=$(otool -L "$lib" | grep -v "@executable_path" | grep -v "/usr/lib" | awk -F' ' '{print $1}')
+              for dep in $deps; do
+                dep_base=$(basename "$dep")
+                if [ -f "src-tauri/libs/macos/universal/$dep_base" ]; then
+                  echo "Fixing reference in $base_name to $dep_base"
+                  install_name_tool -change "$dep" "@executable_path/$dep_base" "$lib"
+                fi
+              done
+            fi
+          done
           
           # List direktori
           echo "macOS library directories:"
-          ls -la vendor/libs/macos/x86_64/
-          ls -la vendor/libs/macos/universal/
+          ls -la src-tauri/libs/macos/x86_64/
+          ls -la src-tauri/libs/macos/universal/
 
       - name: Commit macOS Libraries
         run: |
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
-          git add vendor/libs/macos
+          git add src-tauri/libs/macos
           git diff --quiet && git diff --staged --quiet || (git commit -m "Update macOS libraries" && git push)
 
   extract-linux-libraries:
@@ -151,7 +170,7 @@ jobs:
           sudo apt-get install -y libgexiv2-dev
           
           # Buat direktori untuk menyimpan library
-          mkdir -p vendor/libs/linux/x86_64
+          mkdir -p src-tauri/libs/linux/x86_64
           
           # Cari lokasi library gexiv2
           GEXIV2_PATH=$(pkg-config --variable=libdir gexiv2)/libgexiv2.so
@@ -161,7 +180,7 @@ jobs:
           echo "GExiv2 library found at: $GEXIV2_PATH"
           
           # Salin library utama
-          cp "$GEXIV2_PATH" vendor/libs/linux/x86_64/libgexiv2.so
+          cp "$GEXIV2_PATH" src-tauri/libs/linux/x86_64/libgexiv2.so
           
           # Cari dependencies
           DEPS=$(ldd "$GEXIV2_PATH" | grep "=> /" | awk '{print $3}')
@@ -172,19 +191,19 @@ jobs:
                   "$base_name" != libdl.so* && "$base_name" != libpthread.so* && 
                   "$base_name" != librt.so* && "$base_name" != "ld-linux"* ]]; then
               echo "Copying dependency: $base_name"
-              cp "$dep" "vendor/libs/linux/x86_64/$base_name"
+              cp "$dep" "src-tauri/libs/linux/x86_64/$base_name"
             fi
           done
           
           # List direktori
           echo "Linux library directory:"
-          ls -la vendor/libs/linux/x86_64/
+          ls -la src-tauri/libs/linux/x86_64/
 
       - name: Commit Linux Libraries
         run: |
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
-          git add vendor/libs/linux
+          git add src-tauri/libs/linux
           git diff --quiet && git diff --staged --quiet || (git commit -m "Update Linux libraries" && git push)
 
   create-pr:
@@ -203,18 +222,18 @@ jobs:
         run: |
           git fetch origin
           # Buat branch baru untuk perubahan
-          git checkout -b update-vendor-libs-${{ github.run_id }}
+          git checkout -b update-libs-${{ github.run_id }}
           # Ambil semua perubahan dari branch main
           git merge origin/main
           
           # Cek apakah ada perubahan yang perlu di-merge
-          if git diff --quiet origin/main -- vendor/libs; then
+          if git diff --quiet origin/main -- src-tauri/libs; then
             echo "No library changes detected, skipping PR creation"
             exit 0
           fi
           
           # Push branch baru
-          git push --set-upstream origin update-vendor-libs-${{ github.run_id }}
+          git push --set-upstream origin update-libs-${{ github.run_id }}
           
           # Install GitHub CLI
           curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
@@ -223,9 +242,9 @@ jobs:
           sudo apt install gh -y
           
           # Buat PR
-          gh pr create --title "Update vendor libraries" \
+          gh pr create --title "Update bundled libraries" \
                       --body "This PR updates native library dependencies for multiple platforms" \
                       --base main \
-                      --head update-vendor-libs-${{ github.run_id }}
+                      --head update-libs-${{ github.run_id }}
         env:
           GITHUB_TOKEN: ${{ secrets.REPO_TOKEN }}
