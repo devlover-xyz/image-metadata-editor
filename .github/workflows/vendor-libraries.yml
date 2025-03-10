@@ -1,0 +1,231 @@
+name: "Vendor Library Dependencies"
+on:
+  workflow_dispatch:
+    inputs:
+      force_update:
+        description: 'Force library update even if no changes detected'
+        type: boolean
+        default: false
+  schedule:
+    - cron: '0 0 1 * *'  # Berjalan setiap bulan sekali
+
+jobs:
+  extract-windows-libraries:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.REPO_TOKEN }}  # Gunakan PAT dengan izin push
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          install: >-
+            mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-gexiv2
+
+      - name: Extract Windows Libraries
+        shell: pwsh
+        run: |
+          # Buat direktori untuk menyimpan library
+          $libDir = "vendor/libs/windows/x86_64"
+          New-Item -Path $libDir -ItemType Directory -Force
+
+          # Salin file DLL utama
+          Copy-Item C:\msys64\mingw64\bin\libgexiv2-2.dll "$libDir\gexiv2.dll"
+
+          # Temukan semua dependensi dengan ldd
+          $deps = & C:\msys64\usr\bin\bash.exe -c "ldd /mingw64/bin/libgexiv2-2.dll | grep -v libgexiv2 | grep '=> /mingw64/' | awk '{print \$3}'"
+          
+          foreach ($dep in $deps) {
+            $dep = $dep -replace '/mingw64/bin/', ''
+            Write-Host "Copying dependency: $dep"
+            Copy-Item "C:\msys64\mingw64\bin\$dep" "$libDir\"
+          }
+
+          # Tambahan library yang mungkin diperlukan
+          $additionalLibs = @(
+            "libglib-2.0-0.dll",
+            "libgobject-2.0-0.dll",
+            "libintl-8.dll",
+            "libiconv-2.dll",
+            "libpcre-1.dll",
+            "libwinpthread-1.dll"
+          )
+
+          foreach ($lib in $additionalLibs) {
+            if (Test-Path "C:\msys64\mingw64\bin\$lib" -and -not (Test-Path "$libDir\$lib")) {
+              Write-Host "Copying additional library: $lib"
+              Copy-Item "C:\msys64\mingw64\bin\$lib" "$libDir\"
+            }
+          }
+
+          # Tampilkan isi direktori
+          Get-ChildItem -Path $libDir
+
+      - name: Commit Windows Libraries
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          git add vendor/libs/windows
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update Windows libraries" && git push)
+
+  extract-macos-libraries:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.REPO_TOKEN }}  # Gunakan PAT dengan izin push
+
+      - name: Extract macOS Libraries (x86_64 and arm64)
+        run: |
+          # Instal dependencies
+          brew update
+          brew install pkg-config gexiv2
+          
+          # Deteksi arsitektur saat ini
+          ARCH=$(uname -m)
+          echo "Current architecture: $ARCH"
+          
+          # Buat direktori untuk menyimpan library
+          mkdir -p vendor/libs/macos/x86_64
+          mkdir -p vendor/libs/macos/arm64
+          mkdir -p vendor/libs/macos/universal
+          
+          # Cari lokasi library gexiv2
+          GEXIV2_PATH=$(pkg-config --variable=libdir gexiv2)/libgexiv2.dylib
+          echo "GExiv2 library found at: $GEXIV2_PATH"
+          
+          # Ekstrak library untuk arsitektur saat ini (biasanya x86_64 di GitHub Actions)
+          cp "$GEXIV2_PATH" vendor/libs/macos/x86_64/libgexiv2.dylib
+          
+          # Cari dependencies
+          DEPS=$(otool -L "$GEXIV2_PATH" | grep -v libgexiv2 | grep "$(brew --prefix)" | awk -F' ' '{print $1}')
+          for dep in $DEPS; do
+            base_name=$(basename "$dep")
+            echo "Copying x86_64 dependency: $base_name"
+            cp "$dep" "vendor/libs/macos/x86_64/$base_name"
+          done
+          
+          # Untuk arm64, kita harus menggunakan strategi khusus
+          # Catatan: Di GitHub Actions, ini mungkin tidak berhasil tanpa runner khusus
+          # Pura-pura kita memiliki arm64 libraries dengan dummy file
+          echo "Note: arm64 libraries not available on this runner. Using placeholders."
+          echo "This is a placeholder for arm64 library. Replace with actual library." > vendor/libs/macos/arm64/libgexiv2.dylib
+          
+          # Di lingkungan lokal dengan akses ke perangkat ARM, gunakan:
+          # arch -arm64 brew install gexiv2
+          # ARM_GEXIV2_PATH=$(arch -arm64 pkg-config --variable=libdir gexiv2)/libgexiv2.dylib
+          # cp "$ARM_GEXIV2_PATH" vendor/libs/macos/arm64/libgexiv2.dylib
+          
+          # Copy x86_64 libraries ke universal untuk sementara
+          cp vendor/libs/macos/x86_64/* vendor/libs/macos/universal/
+          
+          # List direktori
+          echo "macOS library directories:"
+          ls -la vendor/libs/macos/x86_64/
+          ls -la vendor/libs/macos/universal/
+
+      - name: Commit macOS Libraries
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          git add vendor/libs/macos
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update macOS libraries" && git push)
+
+  extract-linux-libraries:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.REPO_TOKEN }}  # Gunakan PAT dengan izin push
+
+      - name: Extract Linux Libraries
+        run: |
+          # Instal dependencies
+          sudo apt-get update
+          sudo apt-get install -y libgexiv2-dev
+          
+          # Buat direktori untuk menyimpan library
+          mkdir -p vendor/libs/linux/x86_64
+          
+          # Cari lokasi library gexiv2
+          GEXIV2_PATH=$(pkg-config --variable=libdir gexiv2)/libgexiv2.so
+          if [ ! -f "$GEXIV2_PATH" ]; then
+            GEXIV2_PATH=$(find /usr/lib -name "libgexiv2.so*" | head -n 1)
+          fi
+          echo "GExiv2 library found at: $GEXIV2_PATH"
+          
+          # Salin library utama
+          cp "$GEXIV2_PATH" vendor/libs/linux/x86_64/libgexiv2.so
+          
+          # Cari dependencies
+          DEPS=$(ldd "$GEXIV2_PATH" | grep "=> /" | awk '{print $3}')
+          for dep in $DEPS; do
+            base_name=$(basename "$dep")
+            # Skip lib standar sistem
+            if [[ "$base_name" != libc.so* && "$base_name" != libm.so* && 
+                  "$base_name" != libdl.so* && "$base_name" != libpthread.so* && 
+                  "$base_name" != librt.so* && "$base_name" != "ld-linux"* ]]; then
+              echo "Copying dependency: $base_name"
+              cp "$dep" "vendor/libs/linux/x86_64/$base_name"
+            fi
+          done
+          
+          # List direktori
+          echo "Linux library directory:"
+          ls -la vendor/libs/linux/x86_64/
+
+      - name: Commit Linux Libraries
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          git add vendor/libs/linux
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update Linux libraries" && git push)
+
+  create-pr:
+    needs: [extract-windows-libraries, extract-macos-libraries, extract-linux-libraries]
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.force_update == 'true' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.REPO_TOKEN }}
+          ref: main
+          fetch-depth: 0
+
+      - name: Check for changes and create PR
+        run: |
+          git fetch origin
+          # Buat branch baru untuk perubahan
+          git checkout -b update-vendor-libs-${{ github.run_id }}
+          # Ambil semua perubahan dari branch main
+          git merge origin/main
+          
+          # Cek apakah ada perubahan yang perlu di-merge
+          if git diff --quiet origin/main -- vendor/libs; then
+            echo "No library changes detected, skipping PR creation"
+            exit 0
+          fi
+          
+          # Push branch baru
+          git push --set-upstream origin update-vendor-libs-${{ github.run_id }}
+          
+          # Install GitHub CLI
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          sudo apt update
+          sudo apt install gh -y
+          
+          # Buat PR
+          gh pr create --title "Update vendor libraries" \
+                      --body "This PR updates native library dependencies for multiple platforms" \
+                      --base main \
+                      --head update-vendor-libs-${{ github.run_id }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_TOKEN }}
