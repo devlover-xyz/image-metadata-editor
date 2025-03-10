@@ -40,7 +40,7 @@ $additionalLibs = @(
 )
 
 foreach ($lib in $additionalLibs) {
-  if (Test-Path "C:\msys64\mingw64\bin\$lib" -and -not (Test-Path "$libDir\$lib")) {
+  if (Test-Path "C:\msys64\mingw64\bin\$lib" -not (Test-Path "$libDir\$lib")) {
     Write-Host "Menyalin library tambahan: $lib" -ForegroundColor Gray
     Copy-Item "C:\msys64\mingw64\bin\$lib" "$libDir\"
   }
