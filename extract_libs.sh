@@ -57,52 +57,203 @@ EOF
 # macOS
 elif [[ "$OS" == "Darwin" ]]; then
     echo "Mendeteksi macOS, mengekstrak libraries..."
-    
-    # Salin library utama
-    cp "$(brew --prefix)/lib/libgexiv2.dylib" src-tauri/libs/macos/
 
-    # Temukan dependencies dengan otool
-    DEPS=$(otool -L "$(brew --prefix)/lib/libgexiv2.dylib" | grep -v libgexiv2 | grep "$(brew --prefix)" | awk -F' ' '{print $1}')
+    # Deteksi arsitektur saat ini
+    ARCH=$(uname -m)
+    echo "Current architecture: $ARCH"
+
+    # Buat direktori untuk menyimpan library
+    mkdir -p src-tauri/libs/macos/x86_64
+    mkdir -p src-tauri/libs/macos/arm64
+    mkdir -p src-tauri/libs/macos/universal
     
-    # Salin semua dependencies
-    for dep in $DEPS; do
+    # Cek apakah gexiv2 terdeteksi oleh pkg-config
+    echo "Checking if gexiv2 is properly detected by pkg-config..."
+    pkg-config --modversion gexiv2 || true
+
+    # Cari lokasi library gexiv2
+    GEXIV2_PATH=$(pkg-config --variable=libdir gexiv2)/libgexiv2.dylib
+    echo "GExiv2 library found at: $GEXIV2_PATH"
+
+
+     # Salin library ke direktori arsitektur saat ini
+    if [ "$ARCH" = "x86_64" ]; then
+      # Kita berada di Intel Mac
+      echo "Copying libraries for Intel architecture (x86_64)"
+      cp "$GEXIV2_PATH" src-tauri/libs/macos/x86_64/libgexiv2.dylib
+      
+      # Cari dependencies menggunakan otool
+      DEPS=$(otool -L "$GEXIV2_PATH" | grep -v libgexiv2 | grep "$(brew --prefix)" | awk -F' ' '{print $1}')
+      for dep in $DEPS; do
         base_name=$(basename "$dep")
+        echo "Copying x86_64 dependency: $base_name"
+        cp "$dep" "src-tauri/libs/macos/x86_64/$base_name"
+      done
+      
+      # Coba untuk mendapatkan versi ARM jika mungkin menggunakan Rosetta
+      echo "Attempting to get ARM libraries using Rosetta..."
+      arch -arm64 brew install gexiv2 || true
+      ARM_GEXIV2_PATH=$(arch -arm64 pkg-config --variable=libdir gexiv2 2>/dev/null)/libgexiv2.dylib || true
+      
+      if [ -f "$ARM_GEXIV2_PATH" ]; then
+        echo "ARM version found, copying..."
+        cp "$ARM_GEXIV2_PATH" src-tauri/libs/macos/arm64/libgexiv2.dylib
+        
+        # Cari dependencies untuk ARM
+        ARM_DEPS=$(arch -arm64 otool -L "$ARM_GEXIV2_PATH" 2>/dev/null | grep -v libgexiv2 | grep "$(arch -arm64 brew --prefix 2>/dev/null)" | awk -F' ' '{print $1}')
+        for dep in $ARM_DEPS; do
+          base_name=$(basename "$dep")
+          echo "Copying arm64 dependency: $base_name"
+          cp "$dep" "src-tauri/libs/macos/arm64/$base_name"
+        done
+      else
+        echo "Could not obtain ARM libraries, will use x86_64 version only"
+        # Copy x86_64 libraries ke universal directory
+        cp src-tauri/libs/macos/x86_64/* src-tauri/libs/macos/universal/
+      fi
+    else
+      # Kita berada di ARM Mac (M1/M2)
+      echo "Copying libraries for ARM architecture (arm64)"
+      cp "$GEXIV2_PATH" src-tauri/libs/macos/arm64/libgexiv2.dylib
+      
+      # Cari dependencies menggunakan otool
+      DEPS=$(otool -L "$GEXIV2_PATH" | grep -v libgexiv2 | grep "$(brew --prefix)" | awk -F' ' '{print $1}')
+      for dep in $DEPS; do
+        base_name=$(basename "$dep")
+        echo "Copying arm64 dependency: $base_name"
+        cp "$dep" "src-tauri/libs/macos/arm64/$base_name"
+      done
+      
+      # Coba untuk mendapatkan versi Intel jika mungkin menggunakan Rosetta
+      echo "Attempting to get Intel libraries if possible..."
+      arch -x86_64 brew install gexiv2 || true
+      INTEL_GEXIV2_PATH=$(arch -x86_64 pkg-config --variable=libdir gexiv2 2>/dev/null)/libgexiv2.dylib || true
+      
+      if [ -f "$INTEL_GEXIV2_PATH" ]; then
+        echo "Intel version found, copying..."
+        cp "$INTEL_GEXIV2_PATH" src-tauri/libs/macos/x86_64/libgexiv2.dylib
+        
+        # Cari dependencies untuk Intel
+        INTEL_DEPS=$(arch -x86_64 otool -L "$INTEL_GEXIV2_PATH" 2>/dev/null | grep -v libgexiv2 | grep "$(arch -x86_64 brew --prefix 2>/dev/null)" | awk -F' ' '{print $1}')
+        for dep in $INTEL_DEPS; do
+          base_name=$(basename "$dep")
+          echo "Copying x86_64 dependency: $base_name"
+          cp "$dep" "src-tauri/libs/macos/x86_64/$base_name"
+        done
+      else
+        echo "Could not obtain Intel libraries, will use arm64 version only"
+        # Copy arm64 libraries ke universal directory
+        cp src-tauri/libs/macos/arm64/* src-tauri/libs/macos/universal/
+      fi
+    fi
+    
+    # Coba buat universal binaries jika kedua arsitektur tersedia
+    if [ -f "src-tauri/libs/macos/x86_64/libgexiv2.dylib" ] && [ -f "src-tauri/libs/macos/arm64/libgexiv2.dylib" ]; then
+      echo "Creating universal binaries..."
+      
+      # Buat daftar semua library yang ada di kedua arsitektur
+      x86_files=$(ls src-tauri/libs/macos/x86_64/)
+      arm64_files=$(ls src-tauri/libs/macos/arm64/)
+      
+      # Temukan file yang ada di kedua arsitektur
+      common_files=$(comm -12 <(echo "$x86_files" | sort) <(echo "$arm64_files" | sort))
+      
+      # Buat universal binary untuk setiap file yang umum
+      for file in $common_files; do
+        echo "Creating universal binary for $file"
+        lipo -create "src-tauri/libs/macos/x86_64/$file" "src-tauri/libs/macos/arm64/$file" -output "src-tauri/libs/macos/universal/$file"
+      done
+    fi
+    
+    # Perbaiki path referensi di library universal
+    echo "Fixing library references in universal libraries..."
+    for lib in src-tauri/libs/macos/universal/*.dylib; do
+      if [ -f "$lib" ]; then
+        base_name=$(basename "$lib")
+        # Fix ID
+        install_name_tool -id "@executable_path/$base_name" "$lib"
+        
+        # Fix dependencies
+        deps=$(otool -L "$lib" | grep -v "@executable_path" | grep -v "/usr/lib" | awk -F' ' '{print $1}')
+        for dep in $deps; do
+          dep_base=$(basename "$dep")
+          if [ -f "src-tauri/libs/macos/universal/$dep_base" ]; then
+            echo "Fixing reference in $base_name to $dep_base"
+            install_name_tool -change "$dep" "@executable_path/$dep_base" "$lib"
+          fi
+        done
+      fi
+    done
+    
+    # Pilih direktori yang akan digunakan sebagai library directory
+    if [ -d "src-tauri/libs/macos/universal" ] && [ "$(ls -A src-tauri/libs/macos/universal/)" ]; then
+      echo "Using universal binaries"
+      cp src-tauri/libs/macos/universal/* src-tauri/libs/macos/
+    elif [ "$ARCH" = "x86_64" ]; then
+      echo "Using x86_64 binaries only"
+      cp src-tauri/libs/macos/x86_64/* src-tauri/libs/macos/
+    else
+      echo "Using arm64 binaries only"
+      cp src-tauri/libs/macos/arm64/* src-tauri/libs/macos/
+    fi
+    
+    # Tampilkan isi direktori final
+    echo "Contents of final libs/macos directory:"
+    ls -la src-tauri/libs/macos/
+    
+    # Set environment variables untuk build process
+    echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
+    echo "GEXIV2_NO_PKG_CONFIG=1" >> $GITHUB_ENV
+    echo "GEXIV2_LIB_DIR=$(pwd)/src-tauri/libs/macos" >> $GITHUB_ENV
+    echo "GEXIV2_INCLUDE_DIR=$(pkg-config --variable=includedir gexiv2)/gexiv2" >> $GITHUB_ENV
 
-        # Get current user and group
-        CURRENT_USER=$(whoami)
-        CURRENT_GROUP=$(id -gn)
-        
-        # Copy file and set permissions
-        cp "$dep" "src-tauri/libs/macos/"
-        chown $CURRENT_USER:$CURRENT_GROUP "src-tauri/libs/macos/$(basename "$dep")"
-        chmod 755 "src-tauri/libs/macos/$(basename "$dep")"
-        echo "Copied $base_name"
-        
-        # Perbaiki path di dalam library
-        install_name_tool -id "@executable_path/$base_name" "src-tauri/libs/macos/$base_name"
-        
-        # Untuk library utama, ubah referensi ke dependensi
-        install_name_tool -change "$dep" "@executable_path/$base_name" "src-tauri/libs/macos/libgexiv2.dylib"
-    done
+
     
-    # Perbaiki path di dalam library utama
-    install_name_tool -id "@executable_path/libgexiv2.dylib" "src-tauri/libs/macos/libgexiv2.dylib"
+    # # Salin library utama
+    # cp "$(brew --prefix)/lib/libgexiv2.dylib" src-tauri/libs/macos/
+
+    # # Temukan dependencies dengan otool
+    # DEPS=$(otool -L "$(brew --prefix)/lib/libgexiv2.dylib" | grep -v libgexiv2 | grep "$(brew --prefix)" | awk -F' ' '{print $1}')
     
-    # Perbaiki referensi antar library
-    for lib in src-tauri/libs/macos/*.dylib; do
-        if [ "$lib" != "src-tauri/libs/macos/libgexiv2.dylib" ]; then
-            base_name=$(basename "$lib")
-            dep_libs=$(otool -L "$lib" | grep "$(brew --prefix)" | awk -F' ' '{print $1}')
+    # # Salin semua dependencies
+    # for dep in $DEPS; do
+    #     base_name=$(basename "$dep")
+
+    #     # Get current user and group
+    #     CURRENT_USER=$(whoami)
+    #     CURRENT_GROUP=$(id -gn)
+        
+    #     # Copy file and set permissions
+    #     cp "$dep" "src-tauri/libs/macos/"
+    #     chown $CURRENT_USER:$CURRENT_GROUP "src-tauri/libs/macos/$(basename "$dep")"
+    #     chmod 755 "src-tauri/libs/macos/$(basename "$dep")"
+    #     echo "Copied $base_name"
+        
+    #     # Perbaiki path di dalam library
+    #     install_name_tool -id "@executable_path/$base_name" "src-tauri/libs/macos/$base_name"
+        
+    #     # Untuk library utama, ubah referensi ke dependensi
+    #     install_name_tool -change "$dep" "@executable_path/$base_name" "src-tauri/libs/macos/libgexiv2.dylib"
+    # done
+    
+    # # Perbaiki path di dalam library utama
+    # install_name_tool -id "@executable_path/libgexiv2.dylib" "src-tauri/libs/macos/libgexiv2.dylib"
+    
+    # # Perbaiki referensi antar library
+    # for lib in src-tauri/libs/macos/*.dylib; do
+    #     if [ "$lib" != "src-tauri/libs/macos/libgexiv2.dylib" ]; then
+    #         base_name=$(basename "$lib")
+    #         dep_libs=$(otool -L "$lib" | grep "$(brew --prefix)" | awk -F' ' '{print $1}')
             
-            for dep in $dep_libs; do
-                dep_base=$(basename "$dep")
-                if [ -f "src-tauri/libs/macos/$dep_base" ]; then
-                    install_name_tool -change "$dep" "@executable_path/$dep_base" "$lib"
-                    echo "Fixed reference in $base_name to $dep_base"
-                fi
-            done
-        fi
-    done
+    #         for dep in $dep_libs; do
+    #             dep_base=$(basename "$dep")
+    #             if [ -f "src-tauri/libs/macos/$dep_base" ]; then
+    #                 install_name_tool -change "$dep" "@executable_path/$dep_base" "$lib"
+    #                 echo "Fixed reference in $base_name to $dep_base"
+    #             fi
+    #         done
+    #     fi
+    # done
     
 # Linux
 elif [[ "$OS" == "Linux" ]]; then
