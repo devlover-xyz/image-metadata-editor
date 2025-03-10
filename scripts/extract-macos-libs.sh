@@ -163,16 +163,16 @@ for lib in src-tauri/libs/macos/universal/*.dylib; do
 done
 
 # Pilih direktori yang akan digunakan sebagai library directory
-if [ -d "src-tauri/libs/macos/universal" ] && [ "$(ls -A src-tauri/libs/macos/universal/)" ]; then
-    echo "Menggunakan universal binaries"
-    cp src-tauri/libs/macos/universal/* src-tauri/libs/macos/
-elif [ "$ARCH" = "x86_64" ]; then
-    echo "Menggunakan x86_64 binaries saja"
-    cp src-tauri/libs/macos/x86_64/* src-tauri/libs/macos/
-else
-    echo "Menggunakan arm64 binaries saja"
-    cp src-tauri/libs/macos/arm64/* src-tauri/libs/macos/
-fi
+# if [ -d "src-tauri/libs/macos/universal" ] && [ "$(ls -A src-tauri/libs/macos/universal/)" ]; then
+#     echo "Menggunakan universal binaries"
+#     cp src-tauri/libs/macos/universal/* src-tauri/libs/macos/
+# elif [ "$ARCH" = "x86_64" ]; then
+#     echo "Menggunakan x86_64 binaries saja"
+#     cp src-tauri/libs/macos/x86_64/* src-tauri/libs/macos/
+# else
+#     echo "Menggunakan arm64 binaries saja"
+#     cp src-tauri/libs/macos/arm64/* src-tauri/libs/macos/
+# fi
 
 # Tampilkan hasil
 echo -e "\nPengekstrakan library macOS selesai!"
