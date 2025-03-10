@@ -43,7 +43,8 @@
       "frameworks": [],
       "providerShortName": null,
       "signingIdentity": null,
-      "minimumSystemVersion": "10.13"
+      "minimumSystemVersion": "10.13",
+      "architectures": ["x86_64", "aarch64"]
     },
     "resources": [
       "libs/**/*"
