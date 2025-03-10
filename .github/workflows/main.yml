@@ -51,34 +51,34 @@ jobs:
       #   # webkitgtk 4.0 is for Tauri v1 - webkitgtk 4.1 is for Tauri v2.
       #   # You can remove the one that doesn't apply to your app to speed up the workflow a bit.
 
-      - name: Extract GExiv2 Dependencies (Windows)
-        if: matrix.platform == 'windows-latest'
-        shell: pwsh
-        run: |
-          # Set up MSYS2
-          choco install msys2
-          # Install GExiv2
-          # C:\msys64\usr\bin\bash.exe -lc "pacman -S --noconfirm mingw-w64-x86_64-pkg-config mingw-w64-x86_64-gexiv2"
+      # - name: Extract GExiv2 Dependencies (Windows)
+      #   if: matrix.platform == 'windows-latest'
+      #   shell: pwsh
+      #   run: |
+      #     # Set up MSYS2
+      #     choco install msys2
+      #     # Install GExiv2
+      #     # C:\msys64\usr\bin\bash.exe -lc "pacman -S --noconfirm mingw-w64-x86_64-pkg-config mingw-w64-x86_64-gexiv2"
           
-          # Jalankan script fix-pkg-config.bat
-          cmd /c fix-pkg-config.bat
+      #     # Jalankan script fix-pkg-config.bat
+      #     cmd /c fix-pkg-config.bat
 
-          # Tambahkan mingw64/bin ke PATH untuk proses build
-          echo "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      #     # Tambahkan mingw64/bin ke PATH untuk proses build
+      #     echo "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
     
 
-      - name: Extract GExiv2 Dependencies (macOS)
-        if: matrix.platform == 'macos-latest'
-        run: |
-          brew install gexiv2 pkg-config
-          mkdir -p src-tauri/libs/macos
-          export PKG_CONFIG_PATH="/usr/local/opt/libffi/lib/pkgconfig"
-          cp $(brew --prefix)/lib/libgexiv2.dylib src-tauri/libs/macos/
+      # - name: Extract GExiv2 Dependencies (macOS)
+      #   if: matrix.platform == 'macos-latest'
+      #   run: |
+      #     brew install gexiv2 pkg-config
+      #     mkdir -p src-tauri/libs/macos
+      #     export PKG_CONFIG_PATH="/usr/local/opt/libffi/lib/pkgconfig"
+      #     cp $(brew --prefix)/lib/libgexiv2.dylib src-tauri/libs/macos/
           
-      - name: Run extract_lib script
-        run: |
-          chmod +x ./extract_libs.sh
-          ./extract_libs.sh
+      # - name: Run extract_lib script
+      #   run: |
+      #     chmod +x ./extract_libs.sh
+      #     ./extract_libs.sh
 
       - name: install frontend dependencies
         run: bun install # change this to npm, pnpm or bun depending on which one you use.
