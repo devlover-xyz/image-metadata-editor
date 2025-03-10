@@ -32,9 +32,15 @@ jobs:
           # Set execution policy for current process
           Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process -Force
           
+          # Verify script exists
+          if (!(Test-Path "scripts/extract-windows-libs.ps1")) {
+            Write-Error "Script not found: scripts/extract-windows-libs.ps1"
+            exit 1
+          }
+          
           # Run the extraction script
           Write-Host "Menjalankan script ekstraksi library Windows..."
-          .\extract-windows-libs.ps1
+          ./scripts/extract-windows-libs.ps1
 
       - name: Commit Windows Libraries
         run: |
@@ -53,12 +59,18 @@ jobs:
 
       - name: Run macOS Library Extraction Script
         run: |
+          # Verify script exists
+          if [ ! -f "scripts/extract-macos-libs.sh" ]; then
+            echo "Script not found: scripts/extract-macos-libs.sh"
+            exit 1
+          fi
+          
           # Make the script executable
-          chmod +x extract-macos-libs.sh
+          chmod +x scripts/extract-macos-libs.sh
           
           # Run the extraction script
           echo "Menjalankan script ekstraksi library macOS..."
-          ./extract-macos-libs.sh
+          ./scripts/extract-macos-libs.sh
 
       - name: Commit macOS Libraries
         run: |
@@ -77,12 +89,18 @@ jobs:
 
       - name: Run Linux Library Extraction Script
         run: |
+          # Verify script exists
+          if [ ! -f "scripts/extract-linux-libs.sh" ]; then
+            echo "Script not found: scripts/extract-linux-libs.sh"
+            exit 1
+          fi
+          
           # Make the script executable
-          chmod +x extract-linux-libs.sh
+          chmod +x scripts/extract-linux-libs.sh
           
           # Run the extraction script with sudo
           echo "Menjalankan script ekstraksi library Linux..."
-          sudo ./extract-linux-libs.sh
+          sudo ./scripts/extract-linux-libs.sh
 
       - name: Commit Linux Libraries
         run: |
