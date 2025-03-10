@@ -124,58 +124,58 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.REPO_TOKEN }}
 
-   extract-linux-libraries:
-      runs-on: ubuntu-latest
-      steps:
-        - name: Checkout repository
-          uses: actions/checkout@v3
-          with:
-            token: ${{ secrets.REPO_TOKEN }}  # Gunakan PAT dengan izin push
-            fetch-depth: 0  # Fetch semua history untuk mencegah rejection
-  
-        - name: Run Linux Library Extraction Script
-          run: |
-            # Verify script exists
-            if [ ! -f "scripts/extract-linux-libs.sh" ]; then
-              echo "Script not found: scripts/extract-linux-libs.sh"
-              exit 1
-            fi
+  extract-linux-libraries:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.REPO_TOKEN }}  # Gunakan PAT dengan izin push
+          fetch-depth: 0  # Fetch semua history untuk mencegah rejection
+
+      - name: Run Linux Library Extraction Script
+        run: |
+          # Verify script exists
+          if [ ! -f "scripts/extract-linux-libs.sh" ]; then
+            echo "Script not found: scripts/extract-linux-libs.sh"
+            exit 1
+          fi
+          
+          # Make the script executable
+          chmod +x scripts/extract-linux-libs.sh
+          
+          # Run the extraction script with sudo
+          echo "Menjalankan script ekstraksi library Linux..."
+          sudo -E ./scripts/extract-linux-libs.sh
+
+      - name: Commit and Push Linux Libraries
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          
+          # Fetch the latest changes from remote
+          git fetch origin
+          
+          # Create a unique branch name for this run
+          branchName="lib-update-linux-$GITHUB_RUN_ID"
+          git checkout -b $branchName
+          
+          # Add all changes - include both libraries and the script
+          git add src-tauri/libs/linux
+          git add scripts/extract-linux-libs.sh
+          
+          # Check if there are changes to commit
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git commit -m "Update Linux libraries and extraction script"
+            git push origin $branchName
             
-            # Make the script executable
-            chmod +x scripts/extract-linux-libs.sh
-            
-            # Run the extraction script with sudo
-            echo "Menjalankan script ekstraksi library Linux..."
-            sudo -E ./scripts/extract-linux-libs.sh
-  
-        - name: Commit and Push Linux Libraries
-          run: |
-            git config user.name "GitHub Actions Bot"
-            git config user.email "actions@github.com"
-            
-            # Fetch the latest changes from remote
-            git fetch origin
-            
-            # Create a unique branch name for this run
-            branchName="lib-update-linux-$GITHUB_RUN_ID"
-            git checkout -b $branchName
-            
-            # Add all changes - include both libraries and the script
-            git add src-tauri/libs/linux
-            git add scripts/extract-linux-libs.sh
-            
-            # Check if there are changes to commit
-            if [[ -n "$(git status --porcelain)" ]]; then
-              git commit -m "Update Linux libraries and extraction script"
-              git push origin $branchName
-              
-              # Create or update PR
-              gh pr create --title "Update Linux libraries" --body "Updated Linux libraries and extraction script via automated job" --base main --head $branchName || gh pr edit --title "Update Linux libraries" --body "Updated Linux libraries and extraction script via automated job"
-            else
-              echo "No changes to commit"
-            fi
-          env:
-            GITHUB_TOKEN: ${{ secrets.REPO_TOKEN }}
+            # Create or update PR
+            gh pr create --title "Update Linux libraries" --body "Updated Linux libraries and extraction script via automated job" --base main --head $branchName || gh pr edit --title "Update Linux libraries" --body "Updated Linux libraries and extraction script via automated job"
+          else
+            echo "No changes to commit"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_TOKEN }}
 
   merge-prs:
     needs: [extract-windows-libraries, extract-macos-libraries, extract-linux-libraries]
