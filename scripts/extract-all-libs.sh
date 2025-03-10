@@ -1,7 +1,7 @@
 #!/bin/bash
 # Script untuk mengekstrak semua library untuk semua platform
-# Simpan sebagai extract-all-libs.sh
-# Jalankan dengan: chmod +x extract-all-libs.sh && ./extract-all-libs.sh
+# Simpan sebagai scripts/extract-all-libs.sh
+# Jalankan dengan: chmod +x scripts/extract-all-libs.sh && ./scripts/extract-all-libs.sh
 
 # Deteksi OS
 OS="$(uname)"
@@ -12,17 +12,23 @@ echo "======================="
 echo "OS Terdeteksi: $OS"
 echo
 
+# Pastikan kita berada di root direktori proyek
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR/.." || exit 1
+
 # Jalankan script yang sesuai dengan OS saat ini
 if [[ "$OS" == *"MINGW"* ]] || [[ "$OS" == *"MSYS"* ]] || [[ "$OS" == "Windows"* ]]; then
     echo "Menjalankan script Windows..."
-    powershell.exe -ExecutionPolicy Bypass -File extract-windows-libs.ps1
+    powershell.exe -ExecutionPolicy Bypass -File ./scripts/extract-windows-libs.ps1
 elif [[ "$OS" == "Darwin" ]]; then
     echo "Menjalankan script macOS..."
-    bash extract-macos-libs.sh
+    chmod +x ./scripts/extract-macos-libs.sh
+    ./scripts/extract-macos-libs.sh
 elif [[ "$OS" == "Linux" ]]; then
     echo "Menjalankan script Linux..."
     echo "Dibutuhkan hak admin untuk menginstal package..."
-    sudo bash extract-linux-libs.sh
+    chmod +x ./scripts/extract-linux-libs.sh
+    sudo ./scripts/extract-linux-libs.sh
 else
     echo "OS tidak dikenal: $OS"
     exit 1
