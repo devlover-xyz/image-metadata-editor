@@ -1,9 +1,19 @@
 #!/bin/bash
 # Script untuk mengekstrak library Linux
-# Simpan sebagai extract-linux-libs.sh
-# Jalankan dengan: chmod +x extract-linux-libs.sh && sudo ./extract-linux-libs.sh
+# Simpan sebagai scripts/extract-linux-libs.sh
+# Jalankan dengan: chmod +x scripts/extract-linux-libs.sh && sudo ./scripts/extract-linux-libs.sh
 
-# Memerlukan hak sudo untuk menginstal paket
+# Set umask untuk konsistensi file permission
+umask 022
+
+# Function untuk mengembalikan permission script jika perlu
+revert_permissions() {
+  # Pastikan script memiliki permission yang konsisten
+  chmod 755 "$(readlink -f "$0")"
+}
+
+# Trap untuk membersihkan saat exit
+trap revert_permissions EXIT
 
 # Periksa apakah script dijalankan dengan sudo
 if [ "$EUID" -ne 0 ]; then
@@ -96,6 +106,11 @@ export LD_LIBRARY_PATH="$SCRIPT_DIR/x86_64:$LD_LIBRARY_PATH"
 exec "$@"
 EOF
 
+chmod +x src-tauri/libs/linux/run_with_libs.sh
+
+# Fix permission untuk semua file yang dibuat
+find src-tauri/libs/linux -type f -exec chmod 644 {} \;
+find src-tauri/libs/linux -type d -exec chmod 755 {} \;
 chmod +x src-tauri/libs/linux/run_with_libs.sh
 
 # Tampilkan hasil
