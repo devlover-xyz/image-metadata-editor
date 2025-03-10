@@ -124,7 +124,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.REPO_TOKEN }}
 
-  extract-linux-libraries:
+ extract-linux-libraries:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -146,7 +146,7 @@ jobs:
           
           # Run the extraction script with sudo
           echo "Menjalankan script ekstraksi library Linux..."
-          sudo ./scripts/extract-linux-libs.sh
+          sudo -E ./scripts/extract-linux-libs.sh
 
       - name: Commit and Push Linux Libraries
         run: |
@@ -160,16 +160,17 @@ jobs:
           branchName="lib-update-linux-$GITHUB_RUN_ID"
           git checkout -b $branchName
           
-          # Add changes
+          # Add all changes - include both libraries and the script
           git add src-tauri/libs/linux
+          git add scripts/extract-linux-libs.sh
           
           # Check if there are changes to commit
           if [[ -n "$(git status --porcelain)" ]]; then
-            git commit -m "Update Linux libraries"
+            git commit -m "Update Linux libraries and extraction script"
             git push origin $branchName
             
             # Create or update PR
-            gh pr create --title "Update Linux libraries" --body "Updated Linux libraries via automated script" --base main --head $branchName || gh pr edit --title "Update Linux libraries" --body "Updated Linux libraries via automated script"
+            gh pr create --title "Update Linux libraries" --body "Updated Linux libraries and extraction script via automated job" --base main --head $branchName || gh pr edit --title "Update Linux libraries" --body "Updated Linux libraries and extraction script via automated job"
           else
             echo "No changes to commit"
           fi
