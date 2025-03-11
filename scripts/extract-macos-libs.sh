@@ -144,17 +144,17 @@ fi
 
 # Perbaiki path referensi di library universal
 echo "Memperbaiki referensi library di universal libraries..."
-for lib in src-tauri/libs/macos/universal/*.dylib; do
+for lib in src-tauri/libs/macos/**/*.dylib; do
     if [ -f "$lib" ]; then
         base_name=$(basename "$lib")
         # Fix ID
         install_name_tool -id "@executable_path/$base_name" "$lib"
         
         # Fix dependencies
-        deps=$(otool -L "$lib" | grep -v "@executable_path" | grep -v "/usr/lib" | awk -F' ' '{print $1}')
+        deps=$(otool -L "$lib" | grep -v "@executable_path" | grep "$(brew --prefix)" | grep -v "/usr/lib" | awk -F' ' '{print $1}')
         for dep in $deps; do
             dep_base=$(basename "$dep")
-            if [ -f "src-tauri/libs/macos/universal/$dep_base" ]; then
+            if [ -f "src-tauri/libs/macos/**/$dep_base" ]; then
                 echo "Memperbaiki referensi di $base_name ke $dep_base"
                 install_name_tool -change "$dep" "@executable_path/$dep_base" "$lib"
             fi

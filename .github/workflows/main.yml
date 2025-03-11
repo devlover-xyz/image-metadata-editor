@@ -68,7 +68,7 @@ jobs:
       - name: Extract GExiv2 Dependencies (macOS)
         if: matrix.platform == 'macos-latest'
         run: |
-          # brew install gexiv2 pkg-config
+          brew install gexiv2 pkg-config
           export PKG_CONFIG_PATH="/usr/local/opt/libffi/lib/pkgconfig"
           mkdir -p src-tauri/libs/macos
           # cp $(brew --prefix)/lib/libgexiv2.dylib src-tauri/libs/macos/

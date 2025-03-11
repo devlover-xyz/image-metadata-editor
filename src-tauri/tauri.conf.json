@@ -8,6 +8,7 @@
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "bun run build",
     "frontendDist": "../dist"
+    
   },
   "app": {
     "windows": [
@@ -37,14 +38,6 @@
       "icons/icon.ico"
     ],
     "longDescription": "Aplikasi untuk mengedit metadata gambar seperti titel, deskripsi, dan kata kunci",
-    "macOS": {
-      "entitlements": null,
-      "exceptionDomain": "",
-      "frameworks": [],
-      "providerShortName": null,
-      "signingIdentity": null,
-      "minimumSystemVersion": "10.13"
-    },
     "resources": [
       "libs/**/*"
     ],

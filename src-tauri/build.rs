@@ -20,7 +20,7 @@ fn main() {
     let _ = std::fs::create_dir_all(&deps_dir);
     
     // Path ke library yang dibundel
-    let libs_base = "src-tauri/libs";
+    let libs_base = "libs";
     
     // Sesuaikan dengan platform dan arsitektur
     match (target_os.as_str(), target_arch.as_str()) {

@@ -1,0 +1,16 @@
+{
+    "$schema": "https://schema.tauri.app/config/2",
+    "identifier": "com.image-metadata-editor.app",
+    "bundle": {
+        "macOS": {
+            "entitlements": null,
+            "exceptionDomain": "",
+            "providerShortName": null,
+            "signingIdentity": null,
+            "minimumSystemVersion": "10.13"
+        },
+        "resources": [
+            "libs/macos/**/*"
+        ]
+    }
+}
