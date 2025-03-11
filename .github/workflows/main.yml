@@ -59,7 +59,7 @@ jobs:
           choco install msys2
           
           # Jalankan script fix-pkg-config.bat
-          cmd /c scripts/fix-pkg-config.bat
+          cmd /c ./scripts/fix-pkg-config.bat
 
           # Tambahkan mingw64/bin ke PATH untuk proses build
           echo "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
